@@ -1,0 +1,1 @@
+savedcmd_/repo/imd_2024/2024/hello_world/hello_world.ko := mse-ld -r -EL -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T scripts/module.lds -o /repo/imd_2024/2024/hello_world/hello_world.ko /repo/imd_2024/2024/hello_world/hello_world.o /repo/imd_2024/2024/hello_world/hello_world.mod.o;  true

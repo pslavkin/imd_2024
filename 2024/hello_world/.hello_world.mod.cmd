@@ -1,0 +1,1 @@
+savedcmd_/repo/imd_2024/2024/hello_world/hello_world.mod := printf '%s\n'   hello_world.o | awk '!x[$$0]++ { print("/repo/imd_2024/2024/hello_world/"$$0) }' > /repo/imd_2024/2024/hello_world/hello_world.mod

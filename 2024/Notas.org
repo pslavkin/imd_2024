@@ -1,0 +1,242 @@
+#+Title: Linux device driver
+#+Author: Valentino Slavkin
+* Revisar si el archivo sigue el estilo del kernel
+#+begin_src
+  /linux/scripts/checkpatch.pl --file --no-tree hello_version.c
+#+end_src
+* Makefile
+El Makefile básico es el siguiente:
+#+begin_src makefile
+  obj-m := <<Nombre del module sin el .c>>.o
+  KDIR := <<Kernel path>>
+  all:
+	  $(MAKE) -C $(KDIR) M=$(PWD) modules
+#+end_src
+La opción =-C= le dice a =make= que se ejecute a si mismo en otro directorio, sin cambiar el "working directory"
+
+El =M=$(PWD)= establece la variable de entorno =KBUILD_EXTMOD= que le dice al =make= del kernel que compile módulos externos en ese directorio. Solo soporta uno a la vez.
+También puedes agregar el comando =clean=:
+#+begin_src makefile
+  obj-m := <<Nombre del module sin el .c>>.o
+  KDIR := <<Kernel path>>
+  all:
+	  $(MAKE) -C $(KDIR) M=$(PWD) modules
+  clean:
+	  $(MAKE) -C $(KDIR) M=$(PWD) clean
+#+end_src
+* Instalando los headers
+#+begin_src shell
+  make headers_install
+#+end_src
+* Hello world
+** Licencia
+Primero, si quieres que un driver sea aceptado en linux, debes señalar el tipo de licencia del driver como comentario en la primera línea del archivo:
+#+begin_example
+C source: // SPDX-License-Identifier: <SPDX License Expression>
+C header: /* SPDX-License-Identifier: <SPDX License Expression> */
+ASM:      /* SPDX-License-Identifier: <SPDX License Expression> */
+scripts:  # SPDX-License-Identifier: <SPDX License Expression>
+.rst:     .. SPDX-License-Identifier: <SPDX License Expression>
+.dts{i}:  // SPDX-License-Identifier: <SPDX License Expression>
+#+end_example
+
+En nuestro caso usaremos GPL-2.0+
+#+begin_src C
+  // SPDX-License-Identifier: GPL-2.0+
+#+end_src
+
+Además, utilizando la macro =MODULE_LICENCE= se debe también indicar la licencia, poniendo alguna de las siguientes.
+#+begin_example
+
+The following license idents are currently accepted as indicating free
+software modules
+
+"GPL"				[GNU Public License v2]
+"GPL v2"			[GNU Public License v2]
+"GPL and additional rights"	[GNU Public License v2 rights and more]
+"Dual BSD/GPL"			[GNU Public License v2
+				 or BSD license choice]
+"Dual MIT/GPL"			[GNU Public License v2
+				 or MIT license choice]
+"Dual MPL/GPL"			[GNU Public License v2
+				 or Mozilla license choice]
+
+The following other idents are available
+
+"Proprietary"			[Non free products]
+#+end_example
+** Código
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/init.h][linux/init.h]] nos da las macros =__init= y =__exit=, que aunque no son del todo necesarias (podemos llamar a las funciones =init_module= y =clenup_module=) nos dan mas libertad.
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/module.h][linux/module.h]] es obligatorio para todos los módulos.
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/kernel.h][linux/kernel.h]] nos da utilidades del kernel, en este caso solo utilizaremos =printk=
+#+begin_src C
+  #include <linux/init.h>
+  #include <linux/module.h>
+  #include <linux/kernel.h>
+#+end_src
+Este es el código que se va a ejecutar al cargar el módulo con =insmod= o =modprobe=. Nótese la macro =__init=.
+Si esta función devolviera algo distinto a 0, se tomará como un error.
+#+begin_src C
+  static int __init helloworld_init(void)
+  {
+	  pr_info("Hola Mundo!\n");
+	  return 0;
+  }
+#+end_src
+Este es el código que se va a ejecutar al remover el modulo utilizando =rmmod= o =modprobe -r=
+  #+begin_src C
+  static void __exit helloworld_exit(void)
+  {
+	  pr_info("Fin del mundo\n");
+  }
+#+end_src
+Estas dos son las macros que "envuelven" =helloworld_init= y ~helloworld_exit~ en =init_module= y ~cleanup-module~
+#+begin_src C
+  module_init(helloworld_init);
+  module_exit(helloworld_exit);
+  #+end_src
+Estas dos son macros que definen el autor del modulo y la licencia del mismo, respectivamente.
+El autor se debe escribir como =Nombre <email>= o =Nombre=
+  #+begin_src C
+  MODULE_AUTHOR("Valentino Slavkin");
+  MODULE_LICENSE("GPL");
+#+end_src
+* + Argumentos
+:PROPERTIES:
+:header-args: :main no :tangle ./wargs/wargs.c :comments link
+:END:
+** Imports
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/moduleparam.h][moduleparam.h]] Agrega las macros necesarias para agregar macros
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/stat.h][stat.h]] Agrega macros para los permisos de dichas macros ([[https://lore.kernel.org/all/CA+55aFw5v23T-zvDZp-MmD_EYxF8WbafwwB59934FV7g21uMGQ@mail.gmail.com/][no está recomendado]])
+#+begin_src C
+  #include <linux/init.h>
+  #include <linux/module.h>
+  #include <linux/moduleparam.h>
+  #include <linux/kernel.h>
+  #include <linux/cdev.h>
+  #include <linux/fs.h>
+#+end_src
+** Argumentos
+#+begin_src C
+  static int major_num = 202;
+  static int minor_num = 0;
+  module_param(major_num, int, 0660);
+  MODULE_PARM_DESC(major_num, "Major num to be used by the char device");
+  module_param(minor_num, int, 0660);
+  MODULE_PARM_DESC(minor_num, "Minor num to be used by the char device");
+#+end_src
+** Imprimiendo
+#+begin_src C
+  static int __init helloworld_init(void)
+  {
+	  pr_info("Hola Mundo!\n");
+	  pr_info("INT: %d\n", myint);
+	  pr_info("STR: %s\n", mystring);
+	  return 0;
+  }
+#+end_src
+  #+begin_src C
+    static void __exit helloworld_exit(void)
+    {
+	    pr_info("Fin del mundo\n");
+	    pr_info("INT: %d\n", myint);
+	    pr_info("STR: %s\n", mystring);
+    }
+  module_init(helloworld_init);
+  module_exit(helloworld_exit);
+  MODULE_AUTHOR("Valentino Slavkin");
+  MODULE_LICENSE("GPL");
+#+end_src
+* Char device
+:PROPERTIES:
+:header-args: :main no :tangle ./cdev/cdev.c :comments link
+:END:
+** Imports
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/cdev.h][cdev.h]] nos da las herramientas para hacer un char device.
+[[https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h][fs.h]] nos da la utilidades relacionadas con el file system.
+#+begin_src C
+  #include <linux/init.h>
+  #include <linux/module.h>
+  #include <linux/moduleparam.h>
+  #include <linux/kernel.h>
+  #include <linux/cdev.h>
+  #include <linux/fs.h>
+#+end_src
+** Argumentos
+#+begin_src C
+  static int major_num = 202;
+  static int minor_num = 0;
+  module_param(major_num, int, 0660);
+  MODULE_PARM_DESC(major_num, "Major num to be used by the char device");
+  module_param(minor_num, int, 0660);
+  MODULE_PARM_DESC(minor_num, "Minor num to be used by the char device");
+#+end_src
+** FileSystem
+Como el char device es un archivo, dicho archivo debe de tener "file operations".
+Para esto existe el struct =file_operations=
+#+begin_src C
+  static struct cdev my_dev;
+  static int dev_open (struct inode *inode, struct file *file)
+  {
+	  pr_info("dev_open is called \n");
+	  return 0;
+  }
+  static int dev_close (struct inode *inode, struct file *file)
+  {
+	  pr_info("dev_open is called \n");
+	  return 0;
+  }
+  static long dev_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
+  {
+	  pr_info("dev_ioctl is called\n cmd = %d, arg = %ld", cmd, arg);
+	  return 0;
+  }
+  static const struct file_operations fops = {
+	  .owner = THIS_MODULE,
+	  .open = dev_open,
+	  .release = dev_close,
+	  .unlocked_ioctl = dev_ioctl,
+  };
+#+end_src
+** Inicialización
+#+begin_src C
+  static int __init helloworld_init(void)
+  {
+	  int ret;
+	  dev_t dev = MKDEV(major_num, minor_num);
+	  ret = register_chrdev_region(dev, 1, "my_char_device");
+	  if (ret < 0) {
+		  pr_err("Unable to allocate major number %d\n", major_num);
+		  return ret;
+	  }
+	  cdev_init(&my_dev, &fops);
+	  ret = cdev_add(&my_dev, dev, 1);
+	  if (ret < 0) {
+		  unregister_chrdev_region(dev, 1);
+		  pr_err("Unable to add cdev\n");
+		  return ret;
+	  }
+	  pr_info("Hola Mundo!\n");
+	  return 0;
+  }
+  static void __exit helloworld_exit(void)
+  {
+	  pr_info("Fin del mundo\n");
+	  cdev_del(&my_dev);
+	  unregister_chrdev_region(MKDEV(major_num, minor_num), 1);
+  }
+  module_init(helloworld_init);
+  module_exit(helloworld_exit);
+  MODULE_AUTHOR("Valentino Slavkin");
+  MODULE_LICENSE("GPL");
+#+end_src
+** NOTA
+En este caso *NO* creamos el archivo para el device, por lo que, para poder probar que funcione debes de hacer
+#+begin_src
+mknod /dev/mynode c 202 0
+#+end_src
+=mynode= puede ser reemplazado por cualquier otro nombre, ya que el módulo busca el archivo en base a los números, no por nombres.
+* COMMENT Local Variables
+# Local Variables:
+# jinx-languages: "es en"
+# End:
